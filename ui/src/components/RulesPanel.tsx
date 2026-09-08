@@ -1,10 +1,10 @@
+import { type ShellWindowHandle, useWindowActions } from "@tokimo/sdk";
 import { Alert, Badge, Button, Switch, Tag } from "@tokimo/ui";
 import { Edit3, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { CreateRuleReq, DeliveryDto, RuleDto, SourceDto } from "../api/types";
 import { DeliveryList } from "./DeliveryList";
-import { RuleEditor } from "./RuleEditor";
 
 interface RulesPanelProps {
   sources: SourceDto[];
@@ -17,12 +17,11 @@ interface RulesPanelProps {
 export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftConsumed }: RulesPanelProps) {
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryDto[]>([]);
-  const [editing, setEditing] = useState<RuleDto | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorDraft, setEditorDraft] = useState<CreateRuleReq | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const consumedDraftRef = useRef<CreateRuleReq | null>(null);
+  const { openModalWindow } = useWindowActions();
 
   const load = useCallback(async () => {
     try {
@@ -36,13 +35,38 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
 
   useEffect(() => { void load(); }, [load]);
 
+  const openEditor = useCallback((rule: RuleDto | null, draft: CreateRuleReq | null = null) => {
+    openModalWindow({
+      component: async () => {
+        const { RuleEditor } = await import("./RuleEditor");
+        return {
+          default: ({ win }: { win: ShellWindowHandle }) => (
+            <RuleEditor
+              rule={rule}
+              initialDraft={draft}
+              sources={sources}
+              t={t}
+              onClose={win.close}
+              onSaved={() => {
+                setMessage({ type: "success", text: t("ruleSaved") });
+                void load();
+              }}
+            />
+          ),
+        };
+      },
+      title: rule ? t("editRule") : t("addRule"),
+      width: 720,
+      height: 720,
+    });
+  }, [load, openModalWindow, sources, t]);
+
   useEffect(() => {
-    if (!initialDraft) return;
-    setEditing(null);
-    setEditorDraft(initialDraft);
-    setEditorOpen(true);
+    if (!initialDraft || consumedDraftRef.current === initialDraft) return;
+    consumedDraftRef.current = initialDraft;
+    openEditor(null, initialDraft);
     onInitialDraftConsumed();
-  }, [initialDraft, onInitialDraftConsumed]);
+  }, [initialDraft, onInitialDraftConsumed, openEditor]);
 
   const mutate = async (id: string, action: () => Promise<unknown>) => {
     setBusyId(id);
@@ -71,6 +95,42 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
     }
   };
 
+  const confirmDelete = (rule: RuleDto) => {
+    openModalWindow({
+      component: async () => {
+        const { ConfirmWindow } = await import("./ConfirmWindow");
+        return {
+          default: ({ win }: { win: ShellWindowHandle }) => (
+            <ConfirmWindow
+              message={t("deleteRuleConfirm")}
+              confirmLabel={t("delete")}
+              cancelLabel={t("cancel")}
+              errorPrefix={t("errorPrefix")}
+              danger
+              onClose={win.close}
+              onConfirm={async () => {
+                setBusyId(rule.id);
+                setMessage(null);
+                try {
+                  await api.rules.delete(rule.id);
+                  await load();
+                } catch (reason: unknown) {
+                  setMessage({ type: "error", text: `${t("errorPrefix")}${reason instanceof Error ? reason.message : String(reason)}` });
+                  throw reason;
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+            />
+          ),
+        };
+      },
+      title: t("delete"),
+      width: 420,
+      height: 240,
+    });
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-surface-base px-5 py-5 text-fg-primary">
       <header className="mb-4 flex items-start justify-between gap-4">
@@ -78,7 +138,7 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
           <h1 className="text-lg font-semibold">{t("rules")}</h1>
           <p className="mt-1 text-xs text-fg-secondary">{t("ruleLogic")}</p>
         </div>
-        <Button variant="primary" icon={<Plus />} disabled={sources.every((source) => Boolean(source.archivedAt))} onClick={() => { setEditing(null); setEditorDraft(null); setEditorOpen(true); }}>
+        <Button variant="primary" icon={<Plus />} disabled={sources.every((source) => Boolean(source.archivedAt))} onClick={() => openEditor(null)}>
           {t("addRule")}
         </Button>
       </header>
@@ -101,10 +161,8 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch checked={rule.enabled} loading={busyId === rule.id} size="small" onChange={(enabled) => void mutate(rule.id, () => api.rules.patch(rule.id, { enabled }))} />
-                  <Button size="small" icon={<Edit3 />} onClick={() => { setEditing(rule); setEditorDraft(null); setEditorOpen(true); }}>{t("editRule")}</Button>
-                  <Button size="small" danger icon={<Trash2 />} loading={busyId === rule.id} onClick={() => {
-                    if (window.confirm(t("deleteRuleConfirm"))) void mutate(rule.id, () => api.rules.delete(rule.id));
-                  }}>{t("delete")}</Button>
+                  <Button size="small" icon={<Edit3 />} onClick={() => openEditor(rule)}>{t("editRule")}</Button>
+                  <Button size="small" danger icon={<Trash2 />} loading={busyId === rule.id} onClick={() => confirmDelete(rule)}>{t("delete")}</Button>
                 </div>
               </div>
               <div className="mt-3 space-y-2 text-xs">
@@ -117,15 +175,6 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
         })}
       </div>
       <DeliveryList deliveries={deliveries} locale={locale} testing={testing} t={t} onTest={() => void sendTest()} />
-      <RuleEditor
-        open={editorOpen}
-        rule={editing}
-        initialDraft={editorDraft}
-        sources={sources}
-        t={t}
-        onClose={() => { setEditorOpen(false); setEditorDraft(null); }}
-        onSaved={() => { setMessage({ type: "success", text: t("ruleSaved") }); void load(); }}
-      />
     </div>
   );
 }

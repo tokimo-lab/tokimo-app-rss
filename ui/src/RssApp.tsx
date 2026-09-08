@@ -1,4 +1,4 @@
-import { type AppRuntimeCtx, makeTranslator } from "@tokimo/sdk";
+import { type AppRuntimeCtx, type ShellWindowHandle, makeTranslator, useWindowActions } from "@tokimo/sdk";
 import { Alert, Button, Select } from "@tokimo/ui";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,9 +21,9 @@ export function RssApp({ ctx }: RssAppProps) {
   const [narrow, setNarrow] = useState(false);
   const [view, setView] = useState<AppView>({ kind: "entries" });
   const [sources, setSources] = useState<SourceDto[]>([]);
-  const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [ruleDraft, setRuleDraft] = useState<CreateRuleReq | null>(null);
+  const { openModalWindow } = useWindowActions();
 
   useEffect(() => ctx.shell.subscribeLocale(setLocale), [ctx.shell]);
 
@@ -49,10 +49,27 @@ export function RssApp({ ctx }: RssAppProps) {
     return () => observer.disconnect();
   }, []);
 
-  const openSourceEditor = () => {
+  const openSourceEditor = useCallback((source: SourceDto | null = null) => {
     setView({ kind: "sources" });
-    setSourceEditorOpen(true);
-  };
+    openModalWindow({
+      component: async () => {
+        const { SourceEditor } = await import("./components/SourceEditor");
+        return {
+          default: ({ win }: { win: ShellWindowHandle }) => (
+            <SourceEditor
+              source={source}
+              t={t}
+              onClose={win.close}
+              onSaved={() => { void loadSources(); }}
+            />
+          ),
+        };
+      },
+      title: source ? t("editSource") : t("addSource"),
+      width: 560,
+      height: 620,
+    });
+  }, [loadSources, openModalWindow, t]);
 
   const content = view.kind === "entries" ? (
     <EntryBrowser
@@ -67,9 +84,8 @@ export function RssApp({ ctx }: RssAppProps) {
     <SourcesPanel
       sources={sources}
       locale={locale}
-      editorOpen={sourceEditorOpen}
       t={t}
-      onEditorOpenChange={setSourceEditorOpen}
+      onOpenEditor={openSourceEditor}
       onSourcesChanged={loadSources}
     />
   ) : (
@@ -85,11 +101,11 @@ export function RssApp({ ctx }: RssAppProps) {
   return (
     <div ref={rootRef} className="flex h-full w-full min-w-0 bg-surface-base text-fg-primary">
       {!narrow ? (
-        <Sidebar sources={sources} view={view} t={t} onChange={setView} onAddSource={openSourceEditor} />
+        <Sidebar sources={sources} view={view} t={t} onChange={setView} onAddSource={() => openSourceEditor()} />
       ) : null}
       <main className="flex min-w-0 flex-1 flex-col">
         {narrow ? (
-          <CompactNav sources={sources} view={view} t={t} onChange={setView} onAddSource={openSourceEditor} />
+          <CompactNav sources={sources} view={view} t={t} onChange={setView} onAddSource={() => openSourceEditor()} />
         ) : null}
         {sourceError ? (
           <Alert type="error" banner showIcon message={`${t("errorPrefix")}${sourceError}`} action={<Button size="small" onClick={() => void loadSources()}>{t("retry")}</Button>} />

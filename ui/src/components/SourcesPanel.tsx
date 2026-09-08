@@ -1,24 +1,23 @@
+import { type ShellWindowHandle, useWindowActions } from "@tokimo/sdk";
 import { Alert, Badge, Button } from "@tokimo/ui";
 import { Archive, Edit3, Pause, Play, Plus, RefreshCw, Rss } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api/client";
 import type { SourceDto } from "../api/types";
 import { formatDateTime, safeHttpUrl } from "../lib/format";
-import { SourceEditor } from "./SourceEditor";
 
 interface SourcesPanelProps {
   sources: SourceDto[];
   locale: string;
-  editorOpen: boolean;
   t: (key: string) => string;
-  onEditorOpenChange: (open: boolean) => void;
+  onOpenEditor: (source?: SourceDto | null) => void;
   onSourcesChanged: () => Promise<void>;
 }
 
-export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChange, onSourcesChanged }: SourcesPanelProps) {
-  const [editing, setEditing] = useState<SourceDto | null>(null);
+export function SourcesPanel({ sources, locale, t, onOpenEditor, onSourcesChanged }: SourcesPanelProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const { openModalWindow } = useWindowActions();
 
   const run = async (sourceId: string, action: () => Promise<unknown>, success: string) => {
     setBusyId(sourceId);
@@ -32,11 +31,6 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
     } finally {
       setBusyId(null);
     }
-  };
-
-  const edit = (source: SourceDto) => {
-    setEditing(source);
-    onEditorOpenChange(true);
   };
 
   const refreshSource = async (source: SourceDto) => {
@@ -53,6 +47,43 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
     }
   };
 
+  const confirmArchive = (source: SourceDto) => {
+    openModalWindow({
+      component: async () => {
+        const { ConfirmWindow } = await import("./ConfirmWindow");
+        return {
+          default: ({ win }: { win: ShellWindowHandle }) => (
+            <ConfirmWindow
+              message={t("archiveConfirm")}
+              confirmLabel={t("archive")}
+              cancelLabel={t("cancel")}
+              errorPrefix={t("errorPrefix")}
+              danger
+              onClose={win.close}
+              onConfirm={async () => {
+                setBusyId(source.id);
+                setMessage(null);
+                try {
+                  await api.sources.patch(source.id, { archived: true });
+                  setMessage({ type: "success", text: t("archived") });
+                  await onSourcesChanged();
+                } catch (reason: unknown) {
+                  setMessage({ type: "error", text: `${t("errorPrefix")}${reason instanceof Error ? reason.message : String(reason)}` });
+                  throw reason;
+                } finally {
+                  setBusyId(null);
+                }
+              }}
+            />
+          ),
+        };
+      },
+      title: t("archive"),
+      width: 420,
+      height: 240,
+    });
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-surface-base px-5 py-5 text-fg-primary">
       <header className="mb-4 flex items-start justify-between gap-4">
@@ -60,7 +91,7 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
           <h1 className="text-lg font-semibold">{t("manageSources")}</h1>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-fg-secondary">{t("coverageBody")}</p>
         </div>
-        <Button variant="primary" icon={<Plus />} onClick={() => { setEditing(null); onEditorOpenChange(true); }}>
+        <Button variant="primary" icon={<Plus />} onClick={() => onOpenEditor()}>
           {t("addSource")}
         </Button>
       </header>
@@ -83,7 +114,7 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
                   {link ? <a href={link} target="_blank" rel="noreferrer" className="mt-1 block truncate text-xs text-accent-text hover:underline">{source.url}</a> : <p className="mt-1 truncate text-xs text-fg-muted">{source.url}</p>}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="small" icon={<Edit3 />} onClick={() => edit(source)}>{t("editSource")}</Button>
+                  <Button size="small" icon={<Edit3 />} onClick={() => onOpenEditor(source)}>{t("editSource")}</Button>
                   {!archived ? (
                     <Button
                       size="small"
@@ -110,11 +141,7 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
                       danger
                       icon={<Archive />}
                       loading={busyId === source.id}
-                      onClick={() => {
-                        if (window.confirm(t("archiveConfirm"))) {
-                          void run(source.id, () => api.sources.patch(source.id, { archived: true }), t("archived"));
-                        }
-                      }}
+                      onClick={() => confirmArchive(source)}
                     >
                       {t("archive")}
                     </Button>
@@ -133,16 +160,6 @@ export function SourcesPanel({ sources, locale, editorOpen, t, onEditorOpenChang
           );
         })}
       </div>
-      <SourceEditor
-        open={editorOpen}
-        source={editing}
-        t={t}
-        onClose={() => { setEditing(null); onEditorOpenChange(false); }}
-        onSaved={() => {
-          setMessage({ type: "success", text: editing ? t("sourceUpdated") : t("sourceSaved") });
-          void onSourcesChanged();
-        }}
-      />
     </div>
   );
 }

@@ -1,35 +1,25 @@
-import { Alert, Button, Input, Modal } from "@tokimo/ui";
+import { Alert, Button, Input } from "@tokimo/ui";
 import { CheckCircle, Rss, TestTube2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../api/client";
 import type { SourceDto, TestSourceResp } from "../api/types";
 import { safeHttpUrl } from "../lib/format";
 
 interface SourceEditorProps {
-  open: boolean;
   source: SourceDto | null;
   t: (key: string) => string;
   onClose: () => void;
   onSaved: (source: SourceDto) => void;
 }
 
-export function SourceEditor({ open, source, t, onClose, onSaved }: SourceEditorProps) {
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [interval, setInterval] = useState("300");
+export function SourceEditor({ source, t, onClose, onSaved }: SourceEditorProps) {
+  const [name, setName] = useState(source?.name ?? "");
+  const [url, setUrl] = useState(source?.url ?? "");
+  const [interval, setInterval] = useState(String(source?.pollIntervalSeconds ?? 300));
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<TestSourceResp | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setName(source?.name ?? "");
-    setUrl(source?.url ?? "");
-    setInterval(String(source?.pollIntervalSeconds ?? 300));
-    setTestResult(null);
-    setError(null);
-  }, [open, source]);
 
   const validate = (): number | null => {
     if (!name.trim() || !url.trim()) {
@@ -91,15 +81,8 @@ export function SourceEditor({ open, source, t, onClose, onSaved }: SourceEditor
   };
 
   return (
-    <Modal
-      open={open}
-      title={source ? t("editSource") : t("addSource")}
-      onCancel={onClose}
-      footer={null}
-      width={560}
-      destroyOnClose
-    >
-      <div className="space-y-4 text-fg-primary">
+    <div className="h-full min-h-0 overflow-y-auto bg-surface-base p-5 text-fg-primary">
+      <div className="space-y-4">
         {!source ? (
           <Button variant="dashed" icon={<Rss />} block onClick={applyNodeSeek}>
             {t("nodeSeekPreset")}
@@ -141,6 +124,6 @@ export function SourceEditor({ open, source, t, onClose, onSaved }: SourceEditor
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 }

@@ -1,12 +1,11 @@
-import { Alert, Button, Input, Modal, Select, Switch, TextArea } from "@tokimo/ui";
+import { Alert, Button, Input, Select, Switch, TextArea } from "@tokimo/ui";
 import { Eye, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { CreateRuleReq, EntryDto, MatchScope, RuleDto, SourceDto } from "../api/types";
 import { joinTerms, splitTerms } from "../lib/format";
 
 interface RuleEditorProps {
-  open: boolean;
   rule: RuleDto | null;
   initialDraft?: CreateRuleReq | null;
   sources: SourceDto[];
@@ -15,32 +14,18 @@ interface RuleEditorProps {
   onSaved: () => void;
 }
 
-export function RuleEditor({ open, rule, initialDraft, sources, t, onClose, onSaved }: RuleEditorProps) {
-  const [sourceId, setSourceId] = useState("");
-  const [name, setName] = useState("");
-  const [enabled, setEnabled] = useState(true);
-  const [categories, setCategories] = useState("");
-  const [includeAny, setIncludeAny] = useState("");
-  const [excludeAny, setExcludeAny] = useState("");
-  const [matchScope, setMatchScope] = useState<MatchScope>("title");
+export function RuleEditor({ rule, initialDraft, sources, t, onClose, onSaved }: RuleEditorProps) {
+  const [sourceId, setSourceId] = useState(rule?.sourceId ?? initialDraft?.sourceId ?? sources.find((source) => !source.archivedAt)?.id ?? "");
+  const [name, setName] = useState(rule?.name ?? initialDraft?.name ?? "");
+  const [enabled, setEnabled] = useState(rule?.enabled ?? initialDraft?.enabled ?? true);
+  const [categories, setCategories] = useState(joinTerms(rule?.categories ?? initialDraft?.categories ?? []));
+  const [includeAny, setIncludeAny] = useState(joinTerms(rule?.includeAny ?? initialDraft?.includeAny ?? []));
+  const [excludeAny, setExcludeAny] = useState(joinTerms(rule?.excludeAny ?? initialDraft?.excludeAny ?? []));
+  const [matchScope, setMatchScope] = useState<MatchScope>(rule?.matchScope ?? initialDraft?.matchScope ?? "title");
   const [preview, setPreview] = useState<EntryDto[] | null>(null);
   const [previewCursor, setPreviewCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState<"save" | "preview" | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setSourceId(rule?.sourceId ?? initialDraft?.sourceId ?? sources.find((source) => !source.archivedAt)?.id ?? "");
-    setName(rule?.name ?? initialDraft?.name ?? "");
-    setEnabled(rule?.enabled ?? initialDraft?.enabled ?? true);
-    setCategories(joinTerms(rule?.categories ?? initialDraft?.categories ?? []));
-    setIncludeAny(joinTerms(rule?.includeAny ?? initialDraft?.includeAny ?? []));
-    setExcludeAny(joinTerms(rule?.excludeAny ?? initialDraft?.excludeAny ?? []));
-    setMatchScope(rule?.matchScope ?? initialDraft?.matchScope ?? "title");
-    setPreview(null);
-    setPreviewCursor(null);
-    setError(null);
-  }, [initialDraft, open, rule, sources]);
 
   const input = useMemo<CreateRuleReq>(() => ({
     sourceId,
@@ -116,8 +101,8 @@ export function RuleEditor({ open, rule, initialDraft, sources, t, onClose, onSa
   };
 
   return (
-    <Modal open={open} title={rule ? t("editRule") : t("addRule")} onCancel={onClose} footer={null} width={680} destroyOnClose>
-      <div className="space-y-4 text-fg-primary">
+    <div className="h-full min-h-0 overflow-y-auto bg-surface-base p-5 text-fg-primary">
+      <div className="space-y-4">
         {!rule ? <Button block variant="dashed" icon={<Sparkles />} onClick={useTradePreset}>{t("useTradePreset")}</Button> : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1.4fr_auto]">
           <label>
@@ -182,6 +167,6 @@ export function RuleEditor({ open, rule, initialDraft, sources, t, onClose, onSa
           </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 }
