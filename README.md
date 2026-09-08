@@ -1,6 +1,6 @@
 # tokimo-app-rss
 
-Tokimo 的常驻 RSS / Atom 订阅 App。它把公开 feed 的完整当前窗口保存到 PostgreSQL，提供历史搜索和关键词规则，并通过系统 `notification_center.notify` 提交通知。
+Tokimo 的常驻 RSS / Atom 订阅 App。它把 feed 的完整当前窗口保存到 PostgreSQL，提供历史搜索和关键词规则，并通过系统 `notification_center.notify` 提交通知。
 
 ## 语义
 
@@ -8,7 +8,7 @@ Tokimo 的常驻 RSS / Atom 订阅 App。它把公开 feed 的完整当前窗口
 - 首次成功抓取只建立静默基线；只有之后新插入的条目参与规则匹配。新增或修改规则不会追溯发送。
 - 规则使用 NFKC + 大小写归一化后的字面子串：分类满足、包含任一关键词、且不含任一排除词。
 - entry 与持久 delivery outbox 在同一事务创建；通知成功响应只表示系统已接受。失败按稳定 dedupe key 至少一次重试。
-- 仅支持无需凭据的公开 HTTP(S) URL。每个请求和重定向都校验解析地址，拒绝本机、私网、link-local 与 metadata 地址；总超时 15 秒、响应最多 5 MiB、最多 3 次重定向。
+- 仅支持不含凭据的 HTTP(S) URL；初始 URL 和每次重定向都会重新检查协议与凭据。网络可达范围、DNS 结果及地址访问控制由部署环境的 dnsmasq 和网络策略负责。App 保留 15 秒总超时、5 MiB 响应上限和最多 3 次重定向的资源保护。
 - 不读取 Cookie，不抓网页正文，不执行历史全站爬取，也不持有任何外部推送渠道凭据。
 
 ## API

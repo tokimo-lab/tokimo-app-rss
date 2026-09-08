@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 
 use chrono::{DateTime, FixedOffset};
 use feed_rs::parser;
@@ -79,16 +75,14 @@ async fn fetch_with_redirects(
     last_modified: Option<&str>,
 ) -> Result<FetchOutcome, FetchError> {
     let mut current = Url::parse(url).map_err(|_| fetch_error("invalid feed URL"))?;
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| fetch_error(format!("HTTP client: {e}")))?;
     for redirect_count in 0..=MAX_REDIRECTS {
         validate_url_shape(&current)?;
-        let (host, resolved) = resolve_public(&current).await?;
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(8))
-            .timeout(Duration::from_secs(15))
-            .resolve_to_addrs(&host, &resolved)
-            .build()
-            .map_err(|e| fetch_error(format!("HTTP client: {e}")))?;
         let mut request = client
             .get(current.clone())
             .header(
@@ -346,75 +340,12 @@ pub async fn fail_leased(
 
 fn validate_url_shape(url: &Url) -> Result<(), FetchError> {
     if !matches!(url.scheme(), "http" | "https") {
-        return Err(fetch_error("only public HTTP(S) feeds are supported"));
+        return Err(fetch_error("only HTTP(S) feeds are supported"));
     }
     if !url.username().is_empty() || url.password().is_some() {
         return Err(fetch_error("feed URL credentials are not allowed"));
     }
-    let host = url.host_str().ok_or_else(|| fetch_error("feed URL requires a host"))?;
-    if host.eq_ignore_ascii_case("localhost") || host.ends_with(".localhost") || host.ends_with(".local") {
-        return Err(fetch_error("local feed hosts are not allowed"));
-    }
     Ok(())
-}
-
-async fn resolve_public(url: &Url) -> Result<(String, Vec<SocketAddr>), FetchError> {
-    let host = url
-        .host_str()
-        .ok_or_else(|| fetch_error("feed URL requires a host"))?
-        .to_string();
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| fetch_error("feed URL has no port"))?;
-    let addresses = tokio::net::lookup_host((host.as_str(), port))
-        .await
-        .map_err(|e| fetch_error(format!("DNS resolution failed: {e}")))?
-        .collect::<Vec<_>>();
-    if addresses.is_empty() {
-        return Err(fetch_error("DNS returned no addresses"));
-    }
-    if addresses.iter().any(|address| !is_public_ip(address.ip())) {
-        return Err(fetch_error("feed resolves to a local, private, or metadata address"));
-    }
-    Ok((host, addresses))
-}
-
-fn is_public_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => is_public_v4(ip),
-        IpAddr::V6(ip) => is_public_v6(ip),
-    }
-}
-
-fn is_public_v4(ip: Ipv4Addr) -> bool {
-    let octets = ip.octets();
-    !(ip.is_private()
-        || ip.is_loopback()
-        || ip.is_link_local()
-        || ip.is_multicast()
-        || ip.is_broadcast()
-        || ip.is_unspecified()
-        || octets[0] == 0
-        || octets[0] == 100 && (64..=127).contains(&octets[1])
-        || octets[0] == 192 && octets[1] == 0 && octets[2] == 0
-        || octets[0] == 192 && octets[1] == 0 && octets[2] == 2
-        || octets[0] == 198 && (octets[1] == 18 || octets[1] == 19)
-        || octets[0] == 198 && octets[1] == 51 && octets[2] == 100
-        || octets[0] == 203 && octets[1] == 0 && octets[2] == 113
-        || octets[0] >= 224)
-}
-
-fn is_public_v6(ip: Ipv6Addr) -> bool {
-    if let Some(mapped) = ip.to_ipv4_mapped() {
-        return is_public_v4(mapped);
-    }
-    let segments = ip.segments();
-    !(ip.is_loopback()
-        || ip.is_unspecified()
-        || ip.is_multicast()
-        || (segments[0] & 0xfe00) == 0xfc00
-        || (segments[0] & 0xffc0) == 0xfe80
-        || (segments[0] == 0x2001 && segments[1] == 0x0db8))
 }
 
 fn parse_retry_after(value: &str) -> Option<u64> {
@@ -473,26 +404,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blocks_private_and_metadata_addresses() {
+    fn application_url_validation_allows_network_policy_managed_hosts() {
         for value in [
-            "127.0.0.1",
-            "10.1.2.3",
-            "169.254.169.254",
-            "192.168.1.2",
-            "::1",
-            "fc00::1",
-            "::ffff:127.0.0.1",
-            "::ffff:169.254.169.254",
+            "http://198.18.0.1/feed",
+            "http://127.0.0.1/feed",
+            "http://localhost/feed",
+            "https://reader.local/feed",
         ] {
-            assert!(!is_public_ip(value.parse().unwrap()), "{value}");
+            assert!(normalize_url(value).is_ok(), "{value}");
         }
-        assert!(is_public_ip("1.1.1.1".parse().unwrap()));
     }
 
     #[test]
     fn rejects_credentials_and_non_http() {
         assert!(normalize_url("http://user:pass@example.com/feed").is_err());
-        assert!(normalize_url("file:///etc/passwd").is_err());
+        assert!(normalize_url("ftp://example.com/feed").is_err());
         assert!(
             normalize_url("https://example.com/feed#fragment")
                 .unwrap()
