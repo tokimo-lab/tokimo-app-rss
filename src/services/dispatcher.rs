@@ -90,12 +90,11 @@ mod tests {
     use super::*;
     use crate::db::entities::{deliveries, entries, sources};
 
-    #[test]
-    fn retries_keep_stable_dedupe_key() {
+    fn delivery_view(entry_url: &str) -> DeliveryView {
         let now = Utc::now().fixed_offset();
         let user = Uuid::new_v4();
         let entry_id = Uuid::new_v4();
-        let view = DeliveryView {
+        DeliveryView {
             delivery: deliveries::Model {
                 id: Uuid::new_v4(),
                 user_id: user,
@@ -117,7 +116,7 @@ mod tests {
                 id: entry_id,
                 source_id: Uuid::new_v4(),
                 external_id: "x".into(),
-                url: "https://example.com/x".into(),
+                url: entry_url.into(),
                 title: "标题".into(),
                 summary: None,
                 categories: vec![],
@@ -155,10 +154,36 @@ mod tests {
             },
             rule_names: vec!["规则".into()],
             active_rule_names: vec!["规则".into()],
-        };
+        }
+    }
+
+    #[test]
+    fn retries_keep_stable_dedupe_key() {
+        let view = delivery_view("https://example.com/x");
         let first = notification_request(&view);
         let second = notification_request(&view);
         assert_eq!(first.dedupe_key, second.dedupe_key);
-        assert_eq!(first.action.as_ref().unwrap()["type"], "open-url");
+    }
+
+    #[test]
+    fn valid_entry_url_is_in_action_and_notification_body() {
+        let entry_url = "https://example.com/posts/1?from=rss";
+        let request = notification_request(&delivery_view(entry_url));
+
+        assert_eq!(
+            request.action,
+            Some(serde_json::json!({ "type": "open-url", "url": entry_url }))
+        );
+        assert_eq!(request.body, format!("来源：源\n命中规则：规则\n{entry_url}"));
+    }
+
+    #[test]
+    fn missing_or_invalid_entry_url_does_not_create_a_link() {
+        for entry_url in ["", "not a url", "javascript:alert(1)", "ftp://example.com/post"] {
+            let request = notification_request(&delivery_view(entry_url));
+
+            assert_eq!(request.action, None, "unexpected action for {entry_url:?}");
+            assert_eq!(request.body, "来源：源\n命中规则：规则");
+        }
     }
 }

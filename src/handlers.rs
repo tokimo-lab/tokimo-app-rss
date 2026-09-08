@@ -117,7 +117,7 @@ pub type RulePreviewResp = EntriesListResp;
 
 export_dto! { #[derive(Serialize, TS)] pub struct DeliveryDto {
     #[ts(type = "string")] pub id: Uuid, #[ts(type = "string")] pub entry_id: Uuid,
-    pub entry_title: String, pub source_name: String, pub matched_rules: Vec<String>, pub status: String,
+    pub entry_title: String, pub entry_url: String, pub source_name: String, pub matched_rules: Vec<String>, pub status: String,
     pub attempts: i32, pub next_attempt_at: String, pub last_error: Option<String>, pub accepted_at: Option<String>, pub created_at: String,
 } }
 export_dto! { #[derive(Serialize, TS)] pub struct DeliveriesListResp { pub deliveries: Vec<DeliveryDto> } }
@@ -680,6 +680,7 @@ impl From<DeliveryView> for DeliveryDto {
             id: v.delivery.id,
             entry_id: v.delivery.entry_id,
             entry_title: v.entry.title,
+            entry_url: v.entry.url,
             source_name: v.source.name,
             matched_rules: v.rule_names,
             status: v.delivery.status,
