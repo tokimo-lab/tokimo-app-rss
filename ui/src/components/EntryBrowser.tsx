@@ -2,28 +2,50 @@ import { Alert, Button } from "@tokimo/ui";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { CreateRuleReq, EntriesQuery, EntryDto, SourceDto } from "../api/types";
+import type {
+  CreateRuleReq,
+  EntriesQuery,
+  EntryDto,
+  SavedViewDto,
+  SourceDto,
+} from "../api/types";
 import { formatDateTime } from "../lib/format";
 import { EntryDetail } from "./EntryDetail";
 import { EntryList } from "./EntryList";
 import { type SearchDraft, SearchToolbar } from "./SearchToolbar";
+import { SavedViewSummary } from "./SavedViewSummary";
 
 interface EntryBrowserProps {
   sources: SourceDto[];
   sourceId?: string;
+  viewId?: string;
+  savedView?: SavedViewDto;
   locale: string;
   narrow: boolean;
   t: (key: string) => string;
   onSaveAsRule: (input: CreateRuleReq) => void;
 }
 
-function initialQuery(sourceId?: string): SearchDraft {
-  return { sourceId, matchScope: "title" };
+function initialQuery(sourceId?: string, viewId?: string): SearchDraft {
+  return { sourceId, viewId, matchScope: "title" };
 }
 
-export function EntryBrowser({ sources, sourceId, locale, narrow, t, onSaveAsRule }: EntryBrowserProps) {
-  const [draft, setDraft] = useState<SearchDraft>(() => initialQuery(sourceId));
-  const [query, setQuery] = useState<SearchDraft>(() => initialQuery(sourceId));
+export function EntryBrowser({
+  sources,
+  sourceId,
+  viewId,
+  savedView,
+  locale,
+  narrow,
+  t,
+  onSaveAsRule,
+}: EntryBrowserProps) {
+  const [draft, setDraft] = useState<SearchDraft>(() =>
+    initialQuery(sourceId, viewId),
+  );
+  const [query, setQuery] = useState<SearchDraft>(() =>
+    initialQuery(sourceId, viewId),
+  );
   const [entries, setEntries] = useState<EntryDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [selected, setSelected] = useState<EntryDto | null>(null);
@@ -34,11 +56,11 @@ export function EntryBrowser({ sources, sourceId, locale, narrow, t, onSaveAsRul
   const detailRequest = useRef(0);
 
   useEffect(() => {
-    const next = initialQuery(sourceId);
+    const next = initialQuery(sourceId, viewId);
     setDraft(next);
     setQuery(next);
     setSelected(null);
-  }, [sourceId]);
+  }, [sourceId, viewId]);
 
   useEffect(() => {
     let current = true;
@@ -121,12 +143,19 @@ export function EntryBrowser({ sources, sourceId, locale, narrow, t, onSaveAsRul
         draft={draft}
         sources={sources}
         busy={loading}
+        sourceLocked={Boolean(viewId)}
         t={t}
         onChange={setDraft}
         onSubmit={() => { setSelected(null); setQuery({ ...draft }); }}
-        onReset={() => { const next = initialQuery(sourceId); setDraft(next); setQuery(next); setSelected(null); }}
+        onReset={() => {
+          const next = initialQuery(sourceId, viewId);
+          setDraft(next);
+          setQuery(next);
+          setSelected(null);
+        }}
         onSaveAsRule={onSaveAsRule}
       />
+      {savedView ? <SavedViewSummary view={savedView} t={t} /> : null}
       <div className="border-b border-border-subtle bg-state-info-subtle px-4 py-2 text-[11px] text-state-info-text">
         <strong>{t("coverageTitle")}：</strong> {t("coverageBody")}
         {coverageDate ? ` ${t("collectionStarted")} ${formatDateTime(coverageDate, locale)}。` : ""}

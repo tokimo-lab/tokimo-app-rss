@@ -1,26 +1,51 @@
 import { Button, cn } from "@tokimo/ui";
-import { Archive, List, Plus, Rss, Settings2, SlidersHorizontal } from "lucide-react";
+import {
+  Archive,
+  List,
+  ListFilter,
+  Pencil,
+  Plus,
+  Rss,
+  Settings2,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import type { ReactNode } from "react";
-import type { SourceDto } from "../api/types";
+import type { SavedViewDto, SourceDto } from "../api/types";
 
 export type AppView =
   | { kind: "entries"; sourceId?: string }
+  | { kind: "saved-view"; sourceId: string; viewId: string }
   | { kind: "sources" }
   | { kind: "rules" };
 
 interface SidebarProps {
   sources: SourceDto[];
+  savedViews: SavedViewDto[];
   view: AppView;
   t: (key: string) => string;
   onChange: (view: AppView) => void;
   onAddSource: () => void;
+  onAddSavedView: (source: SourceDto) => void;
+  onEditSavedView: (view: SavedViewDto) => void;
+  onDeleteSavedView: (view: SavedViewDto) => void;
 }
 
 function isSelected(view: AppView, sourceId?: string): boolean {
   return view.kind === "entries" && view.sourceId === sourceId;
 }
 
-export function Sidebar({ sources, view, t, onChange, onAddSource }: SidebarProps) {
+export function Sidebar({
+  sources,
+  savedViews,
+  view,
+  t,
+  onChange,
+  onAddSource,
+  onAddSavedView,
+  onEditSavedView,
+  onDeleteSavedView,
+}: SidebarProps) {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border-subtle bg-surface-sidebar text-fg-primary">
       <header className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-3.5">
@@ -56,18 +81,77 @@ export function Sidebar({ sources, view, t, onChange, onAddSource }: SidebarProp
           />
         </div>
 
-        {sources.map((source) => (
-          <NavButton
-            key={source.id}
-            active={isSelected(view, source.id)}
-            icon={source.archivedAt ? <Archive /> : <Rss />}
-            label={source.name}
-            suffix={source.entryCount.toLocaleString()}
-            muted={Boolean(source.archivedAt) || !source.enabled}
-            warning={Boolean(source.lastError) || source.gapSuspected}
-            onClick={() => onChange({ kind: "entries", sourceId: source.id })}
-          />
-        ))}
+        {sources.map((source) => {
+          const sourceViews = savedViews.filter(
+            (savedView) => savedView.sourceId === source.id,
+          );
+          return (
+            <div key={source.id}>
+              <div className="flex min-w-0 items-center gap-0.5">
+                <NavButton
+                  active={isSelected(view, source.id)}
+                  icon={source.archivedAt ? <Archive /> : <Rss />}
+                  label={source.name}
+                  suffix={source.entryCount.toLocaleString()}
+                  muted={Boolean(source.archivedAt) || !source.enabled}
+                  warning={Boolean(source.lastError) || source.gapSuspected}
+                  onClick={() =>
+                    onChange({ kind: "entries", sourceId: source.id })
+                  }
+                />
+                <Button
+                  variant="text"
+                  size="xs"
+                  shape="circle"
+                  icon={<Plus />}
+                  aria-label={`${t("addSavedView")}: ${source.name}`}
+                  title={t("addSavedView")}
+                  onClick={() => onAddSavedView(source)}
+                />
+              </div>
+              {sourceViews.map((savedView) => (
+                <div
+                  key={savedView.id}
+                  className="ml-4 flex min-w-0 items-center gap-0.5"
+                >
+                  <NavButton
+                    active={
+                      view.kind === "saved-view" && view.viewId === savedView.id
+                    }
+                    icon={<ListFilter />}
+                    label={savedView.name}
+                    onClick={() =>
+                      onChange({
+                        kind: "saved-view",
+                        sourceId: source.id,
+                        viewId: savedView.id,
+                      })
+                    }
+                  />
+                  <Button
+                    variant="text"
+                    size="xs"
+                    shape="circle"
+                    icon={<Pencil />}
+                    aria-label={`${t("editSavedView")}: ${savedView.name}`}
+                    title={t("editSavedView")}
+                    onClick={() => onEditSavedView(savedView)}
+                  />
+                  <Button
+                    variant="text"
+                    size="xs"
+                    shape="circle"
+                    danger
+                    icon={<Trash2 />}
+                    aria-label={`${t("delete")}: ${savedView.name}`}
+                    title={t("delete")}
+                    onClick={() => onDeleteSavedView(savedView)}
+                  />
+                </div>
+              ))}
+            </div>
+          );
+        })}
 
         <div className="mt-3 border-t border-border-subtle pt-2">
           <NavButton

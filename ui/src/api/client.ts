@@ -1,17 +1,21 @@
 import type {
   CreateRuleReq,
+  CreateSavedViewReq,
   CreateSourceReq,
   DeliveriesListResp,
   EntriesListResp,
   EntriesQuery,
   EntryDto,
   PatchRuleReq,
+  PatchSavedViewReq,
   PatchSourceReq,
   RefreshSourceResp,
   RuleDto,
   RulePreviewReq,
   RulePreviewResp,
   RulesListResp,
+  SavedViewDto,
+  SavedViewsListResp,
   SourceDto,
   SourcesListResp,
   TestNotificationResp,
@@ -100,6 +104,15 @@ export const api = {
       request(`/rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
     preview: (input: RulePreviewReq): Promise<RulePreviewResp> =>
       request("/rules/preview", json("POST", input)),
+  },
+  views: {
+    list: (): Promise<SavedViewsListResp> => request("/views"),
+    create: (input: CreateSavedViewReq): Promise<SavedViewDto> =>
+      request("/views", json("POST", input)),
+    patch: (id: string, input: PatchSavedViewReq): Promise<SavedViewDto> =>
+      request(`/views/${encodeURIComponent(id)}`, json("PATCH", input)),
+    delete: (id: string): Promise<void> =>
+      request(`/views/${encodeURIComponent(id)}`, { method: "DELETE" }),
   },
   deliveries: {
     list: (): Promise<DeliveriesListResp> => request("/deliveries"),

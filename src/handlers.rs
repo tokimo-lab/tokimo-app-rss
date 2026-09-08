@@ -16,11 +16,12 @@ use crate::{
     AppError,
     bus_clients::notifications::{self, NotifyRequest},
     db::{
-        entities::{entries, rules, sources},
+        entities::{entries, rules, saved_views, sources},
         repos::{
             deliveries_repo::{DeliveriesRepo, DeliveryView},
             entries_repo::{EntriesRepo, EntrySearch},
             rules_repo::{RuleInput, RulePatch, RulesRepo},
+            saved_views_repo::{SavedViewInput, SavedViewPatch, SavedViewsRepo},
             sources_repo::SourcesRepo,
         },
     },
@@ -68,6 +69,7 @@ export_dto! { #[derive(Serialize, TS)] pub struct EntriesListResp { pub entries:
 pub struct EntriesQuery {
     pub q: Option<String>,
     pub source_id: Option<Uuid>,
+    pub view_id: Option<Uuid>,
     pub category: Option<String>,
     pub author: Option<String>,
     pub published_from: Option<String>,
@@ -75,6 +77,21 @@ pub struct EntriesQuery {
     pub match_scope: Option<String>,
     pub cursor: Option<String>,
 }
+
+export_dto! { #[derive(Serialize, TS)] pub struct SavedViewDto {
+    #[ts(type = "string")] pub id: Uuid, #[ts(type = "string")] pub source_id: Uuid,
+    pub name: String, pub categories: Vec<String>, pub include_any: Vec<String>,
+    pub exclude_any: Vec<String>, pub match_scope: String, pub created_at: String, pub updated_at: String,
+} }
+export_dto! { #[derive(Serialize, TS)] pub struct SavedViewsListResp { pub views: Vec<SavedViewDto> } }
+export_dto! { #[derive(Deserialize, TS)] pub struct CreateSavedViewReq {
+    #[ts(type = "string")] pub source_id: Uuid, pub name: String, #[serde(default)] pub categories: Vec<String>,
+    #[serde(default)] pub include_any: Vec<String>, #[serde(default)] pub exclude_any: Vec<String>, pub match_scope: String,
+} }
+export_dto! { #[derive(Deserialize, TS)] pub struct PatchSavedViewReq {
+    pub name: Option<String>, pub categories: Option<Vec<String>>, pub include_any: Option<Vec<String>>,
+    pub exclude_any: Option<Vec<String>>, pub match_scope: Option<String>,
+} }
 
 export_dto! { #[derive(Serialize, TS)] pub struct RuleDto {
     #[ts(type = "string")] pub id: Uuid, #[ts(type = "string")] pub source_id: Uuid,
@@ -229,6 +246,93 @@ pub async fn entries_get(
         .await?
         .ok_or_else(|| AppError::not_found("entry not found"))?;
     Ok(Json(entry_dto(entry, &source.name)))
+}
+
+pub async fn saved_views_list(
+    State(ctx): State<Arc<AppCtx>>,
+    TokimoUser { user_id }: TokimoUser,
+) -> Result<Json<SavedViewsListResp>, AppError> {
+    Ok(Json(SavedViewsListResp {
+        views: SavedViewsRepo::list(&ctx.db, parse_user_id(&user_id)?)
+            .await?
+            .into_iter()
+            .map(SavedViewDto::from)
+            .collect(),
+    }))
+}
+
+pub async fn saved_views_create(
+    State(ctx): State<Arc<AppCtx>>,
+    TokimoUser { user_id }: TokimoUser,
+    Json(req): Json<CreateSavedViewReq>,
+) -> Result<Json<SavedViewDto>, AppError> {
+    let categories = clean_values(req.categories)?;
+    let include_any = clean_values(req.include_any)?;
+    let exclude_any = clean_values(req.exclude_any)?;
+    validate_saved_view(&req.name, &categories, &include_any, &exclude_any, &req.match_scope)?;
+    let view = SavedViewsRepo::create(
+        &ctx.db,
+        parse_user_id(&user_id)?,
+        SavedViewInput {
+            source_id: req.source_id,
+            name: req.name.trim().into(),
+            categories,
+            include_any,
+            exclude_any,
+            match_scope: req.match_scope,
+        },
+    )
+    .await?;
+    Ok(Json(SavedViewDto::from(view)))
+}
+
+pub async fn saved_views_patch(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<Uuid>,
+    TokimoUser { user_id }: TokimoUser,
+    Json(req): Json<PatchSavedViewReq>,
+) -> Result<Json<SavedViewDto>, AppError> {
+    let user_id = parse_user_id(&user_id)?;
+    let existing = SavedViewsRepo::get(&ctx.db, user_id, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("saved view not found"))?;
+    let categories = req.categories.map(clean_values).transpose()?;
+    let include_any = req.include_any.map(clean_values).transpose()?;
+    let exclude_any = req.exclude_any.map(clean_values).transpose()?;
+    validate_saved_view(
+        req.name.as_deref().unwrap_or(&existing.name),
+        categories.as_deref().unwrap_or(&existing.categories),
+        include_any.as_deref().unwrap_or(&existing.include_any),
+        exclude_any.as_deref().unwrap_or(&existing.exclude_any),
+        req.match_scope.as_deref().unwrap_or(&existing.match_scope),
+    )?;
+    let view = SavedViewsRepo::update(
+        &ctx.db,
+        user_id,
+        id,
+        SavedViewPatch {
+            name: req.name.map(|value| value.trim().into()),
+            categories,
+            include_any,
+            exclude_any,
+            match_scope: req.match_scope,
+        },
+    )
+    .await?
+    .ok_or_else(|| AppError::not_found("saved view not found"))?;
+    Ok(Json(SavedViewDto::from(view)))
+}
+
+pub async fn saved_views_delete(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<Uuid>,
+    TokimoUser { user_id }: TokimoUser,
+) -> Result<Json<DeleteResp>, AppError> {
+    let deleted = SavedViewsRepo::delete(&ctx.db, parse_user_id(&user_id)?, id).await?;
+    if deleted == 0 {
+        return Err(AppError::not_found("saved view not found"));
+    }
+    Ok(Json(DeleteResp { deleted }))
 }
 
 pub async fn rules_list(
@@ -436,6 +540,28 @@ async fn search_entries(
     if let Some(v) = &query.match_scope {
         validate_scope(v)?;
     }
+    let saved_view = if let Some(view_id) = query.view_id {
+        Some(
+            SavedViewsRepo::get(db, user_id, view_id)
+                .await?
+                .ok_or_else(|| AppError::not_found("saved view not found"))?,
+        )
+    } else {
+        None
+    };
+    let source_id = saved_view.as_ref().map(|view| view.source_id).or(query.source_id);
+    let base_categories = saved_view
+        .as_ref()
+        .map(|view| view.categories.clone())
+        .unwrap_or_default();
+    let base_include_any = saved_view
+        .as_ref()
+        .map(|view| view.include_any.iter().map(|value| matcher::normalize(value)).collect())
+        .unwrap_or_default();
+    let base_exclude_any = saved_view
+        .as_ref()
+        .map(|view| view.exclude_any.iter().map(|value| matcher::normalize(value)).collect())
+        .unwrap_or_default();
     let params = EntrySearch {
         query_terms: query
             .q
@@ -445,7 +571,13 @@ async fn search_entries(
             .split_whitespace()
             .map(str::to_string)
             .collect(),
-        source_id: query.source_id,
+        source_id,
+        base_categories,
+        base_include_any,
+        base_exclude_any,
+        base_include_summary: saved_view
+            .as_ref()
+            .is_some_and(|view| view.match_scope == "title_summary"),
         category: query.category,
         author: query.author,
         published_from: parse_date(query.published_from)?,
@@ -527,6 +659,21 @@ impl From<rules::Model> for RuleDto {
         }
     }
 }
+impl From<saved_views::Model> for SavedViewDto {
+    fn from(view: saved_views::Model) -> Self {
+        Self {
+            id: view.id,
+            source_id: view.source_id,
+            name: view.name,
+            categories: view.categories,
+            include_any: view.include_any,
+            exclude_any: view.exclude_any,
+            match_scope: view.match_scope,
+            created_at: view.created_at.to_rfc3339(),
+            updated_at: view.updated_at.to_rfc3339(),
+        }
+    }
+}
 impl From<DeliveryView> for DeliveryDto {
     fn from(v: DeliveryView) -> Self {
         Self {
@@ -576,9 +723,28 @@ fn validate_rule(name: &str, include: &[String], exclude: &[String], scope: &str
     }
     Ok(())
 }
+fn validate_saved_view(
+    name: &str,
+    categories: &[String],
+    include: &[String],
+    exclude: &[String],
+    scope: &str,
+) -> Result<(), AppError> {
+    validate_name(name)?;
+    validate_scope(scope)?;
+    if categories.is_empty() && include.is_empty() {
+        return Err(AppError::bad_request(
+            "saved view requires a category or includeAny keyword",
+        ));
+    }
+    if categories.len() > 100 || include.len() > 100 || exclude.len() > 100 {
+        return Err(AppError::bad_request("too many filter values"));
+    }
+    Ok(())
+}
 fn clean_values(v: Vec<String>) -> Result<Vec<String>, AppError> {
     if v.iter().any(|x| x.chars().count() > 200) {
-        return Err(AppError::bad_request("rule value is too long"));
+        return Err(AppError::bad_request("filter value is too long"));
     }
     Ok(v.into_iter()
         .map(|x| x.trim().to_string())
@@ -610,4 +776,31 @@ fn parse_user_id(v: &str) -> Result<Uuid, AppError> {
 }
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_saved_view;
+
+    #[test]
+    fn saved_view_accepts_category_or_keywords() {
+        assert!(validate_saved_view("trade", &["trade".into()], &[], &[], "title").is_ok());
+        assert!(validate_saved_view("providers", &[], &["DMIT".into(), "搬瓦工".into()], &[], "title").is_ok());
+        assert!(
+            validate_saved_view(
+                "trade providers",
+                &["trade".into()],
+                &["DMIT".into(), "搬瓦工".into()],
+                &[],
+                "title_summary",
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn saved_view_rejects_empty_or_exclude_only_filters() {
+        assert!(validate_saved_view("empty", &[], &[], &[], "title").is_err());
+        assert!(validate_saved_view("exclude only", &[], &[], &["求购".into()], "title").is_err());
+    }
 }

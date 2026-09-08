@@ -28,6 +28,10 @@ pub struct NewEntry {
 pub struct EntrySearch {
     pub query_terms: Vec<String>,
     pub source_id: Option<Uuid>,
+    pub base_categories: Vec<String>,
+    pub base_include_any: Vec<String>,
+    pub base_exclude_any: Vec<String>,
+    pub base_include_summary: bool,
     pub category: Option<String>,
     pub author: Option<String>,
     pub published_from: Option<DateTime<FixedOffset>>,
@@ -88,6 +92,38 @@ impl EntriesRepo {
             } else {
                 Condition::all().add(entries::Column::NormalizedTitle.like(&pattern))
             };
+            query = query.filter(condition);
+        }
+        if !params.base_categories.is_empty() {
+            query = query.filter(
+                Expr::col(entries::Column::Categories)
+                    .binary(PgBinOper::Overlap, Expr::val(params.base_categories.clone())),
+            );
+        }
+        if !params.base_include_any.is_empty() {
+            let mut condition = Condition::any();
+            for term in &params.base_include_any {
+                let pattern = format!("%{}%", escape_like(term));
+                condition = condition.add(entries::Column::NormalizedTitle.like(&pattern));
+                if params.base_include_summary {
+                    condition = condition.add(entries::Column::NormalizedSummary.like(&pattern));
+                }
+            }
+            query = query.filter(condition);
+        }
+        if !params.base_exclude_any.is_empty() {
+            let mut condition = Condition::all();
+            for term in &params.base_exclude_any {
+                let pattern = format!("%{}%", escape_like(term));
+                condition = condition.add(entries::Column::NormalizedTitle.not_like(&pattern));
+                if params.base_include_summary {
+                    condition = condition.add(
+                        Condition::any()
+                            .add(entries::Column::NormalizedSummary.is_null())
+                            .add(entries::Column::NormalizedSummary.not_like(&pattern)),
+                    );
+                }
+            }
             query = query.filter(condition);
         }
         if let Some(category) = &params.category {

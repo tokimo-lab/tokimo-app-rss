@@ -9,6 +9,7 @@ interface SearchToolbarProps {
   draft: SearchDraft;
   sources: SourceDto[];
   busy: boolean;
+  sourceLocked?: boolean;
   t: (key: string) => string;
   onChange: (next: SearchDraft) => void;
   onSubmit: () => void;
@@ -16,9 +17,9 @@ interface SearchToolbarProps {
   onSaveAsRule: (input: CreateRuleReq) => void;
 }
 
-export function SearchToolbar({ draft, sources, busy, t, onChange, onSubmit, onReset, onSaveAsRule }: SearchToolbarProps) {
+export function SearchToolbar({ draft, sources, busy, sourceLocked = false, t, onChange, onSubmit, onReset, onSaveAsRule }: SearchToolbarProps) {
   const terms = (draft.q ?? "").trim().split(/\s+/).filter(Boolean);
-  const canSaveAsRule = Boolean(draft.sourceId) && terms.length === 1 && !draft.author && !draft.publishedFrom && !draft.publishedTo;
+  const canSaveAsRule = Boolean(draft.sourceId) && !draft.viewId && terms.length === 1 && !draft.author && !draft.publishedFrom && !draft.publishedTo;
   const sourceOptions = [
     { label: t("allSources"), value: "" },
     ...sources.map((source) => ({ label: source.name, value: source.id })),
@@ -46,6 +47,7 @@ export function SearchToolbar({ draft, sources, busy, t, onChange, onSubmit, onR
           <Select
             value={draft.sourceId ?? ""}
             options={sourceOptions}
+            disabled={sourceLocked}
             onChange={(value: string | number) =>
               onChange({ ...draft, sourceId: String(value) || undefined })
             }

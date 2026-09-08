@@ -35,6 +35,14 @@ fn build_router(ctx: Arc<AppCtx>) -> Router {
         .route("/sources/{id}/refresh", post(handlers::sources_refresh))
         .route("/entries", get(handlers::entries_list))
         .route("/entries/{id}", get(handlers::entries_get))
+        .route(
+            "/views",
+            get(handlers::saved_views_list).post(handlers::saved_views_create),
+        )
+        .route(
+            "/views/{id}",
+            patch(handlers::saved_views_patch).delete(handlers::saved_views_delete),
+        )
         .route("/rules", get(handlers::rules_list).post(handlers::rules_create))
         .route("/rules/preview", post(handlers::rules_preview))
         .route(
