@@ -79,6 +79,7 @@ export function SearchToolbar({ draft, sources, busy, t, onChange, onSubmit, onR
               sourceId: draft.sourceId as string,
               name: terms[0],
               enabled: true,
+              notifyEnabled: true,
               categories: draft.category?.trim() ? [draft.category.trim()] : [],
               includeAny: terms,
               excludeAny: [],

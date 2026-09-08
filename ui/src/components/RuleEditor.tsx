@@ -18,6 +18,7 @@ export function RuleEditor({ rule, initialDraft, sources, t, onClose, onSaved }:
   const [sourceId, setSourceId] = useState(rule?.sourceId ?? initialDraft?.sourceId ?? sources.find((source) => !source.archivedAt)?.id ?? "");
   const [name, setName] = useState(rule?.name ?? initialDraft?.name ?? "");
   const [enabled, setEnabled] = useState(rule?.enabled ?? initialDraft?.enabled ?? true);
+  const [notifyEnabled, setNotifyEnabled] = useState(rule?.notifyEnabled ?? initialDraft?.notifyEnabled ?? true);
   const [categories, setCategories] = useState(joinTerms(rule?.categories ?? initialDraft?.categories ?? []));
   const [includeAny, setIncludeAny] = useState(joinTerms(rule?.includeAny ?? initialDraft?.includeAny ?? []));
   const [excludeAny, setExcludeAny] = useState(joinTerms(rule?.excludeAny ?? initialDraft?.excludeAny ?? []));
@@ -31,11 +32,12 @@ export function RuleEditor({ rule, initialDraft, sources, t, onClose, onSaved }:
     sourceId,
     name: name.trim(),
     enabled,
+    notifyEnabled,
     categories: splitTerms(categories),
     includeAny: splitTerms(includeAny),
     excludeAny: splitTerms(excludeAny),
     matchScope,
-  }), [categories, enabled, excludeAny, includeAny, matchScope, name, sourceId]);
+  }), [categories, enabled, excludeAny, includeAny, matchScope, name, notifyEnabled, sourceId]);
 
   const previewRules = async (cursor?: string) => {
     if (!sourceId || input.includeAny.length === 0) {
@@ -74,6 +76,7 @@ export function RuleEditor({ rule, initialDraft, sources, t, onClose, onSaved }:
         await api.rules.patch(rule.id, {
           name: input.name,
           enabled: input.enabled,
+          notifyEnabled: input.notifyEnabled,
           categories: input.categories,
           includeAny: input.includeAny,
           excludeAny: input.excludeAny,
@@ -119,9 +122,14 @@ export function RuleEditor({ rule, initialDraft, sources, t, onClose, onSaved }:
             <span className="mb-1 block text-xs font-medium text-fg-secondary">{t("ruleName")}</span>
             <Input value={name} onChange={(event) => setName(event.target.value)} className="w-full" />
           </label>
-          <label className="flex items-end gap-2 pb-1 text-xs text-fg-secondary">
-            <Switch checked={enabled} onChange={setEnabled} size="small" /> {t("enabled")}
-          </label>
+          <div className="flex flex-col justify-end gap-2 pb-1">
+            <label className="flex items-center gap-2 text-xs text-fg-secondary">
+              <Switch checked={enabled} onChange={setEnabled} size="small" /> {t("enabled")}
+            </label>
+            <label className="flex items-center gap-2 text-xs text-fg-secondary">
+              <Switch checked={notifyEnabled} onChange={setNotifyEnabled} size="small" /> {t("notifyEnabled")}
+            </label>
+          </div>
         </div>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-fg-secondary">{t("categories")}</span>

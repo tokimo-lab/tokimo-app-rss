@@ -148,6 +148,7 @@ impl DeliveriesRepo {
             .filter(rules::Column::SourceId.eq(source.id))
             .filter(rules::Column::Id.is_in(delivery.matched_rules.clone()))
             .filter(rules::Column::Enabled.eq(true))
+            .filter(rules::Column::NotifyEnabled.eq(true))
             .all(db)
             .await?;
         Ok(Some(DeliveryView {

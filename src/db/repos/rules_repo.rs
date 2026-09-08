@@ -12,6 +12,7 @@ pub struct RuleInput {
     pub source_id: Uuid,
     pub name: String,
     pub enabled: bool,
+    pub notify_enabled: bool,
     pub categories: Vec<String>,
     pub include_any: Vec<String>,
     pub exclude_any: Vec<String>,
@@ -21,6 +22,7 @@ pub struct RuleInput {
 pub struct RulePatch {
     pub name: Option<String>,
     pub enabled: Option<bool>,
+    pub notify_enabled: Option<bool>,
     pub categories: Option<Vec<String>>,
     pub include_any: Option<Vec<String>>,
     pub exclude_any: Option<Vec<String>>,
@@ -71,6 +73,7 @@ impl RulesRepo {
             source_id: Set(input.source_id),
             name: Set(input.name),
             enabled: Set(input.enabled),
+            notify_enabled: Set(input.notify_enabled),
             categories: Set(input.categories),
             include_any: Set(input.include_any),
             exclude_any: Set(input.exclude_any),
@@ -102,6 +105,9 @@ impl RulesRepo {
         }
         if let Some(value) = patch.enabled {
             active.enabled = Set(value);
+        }
+        if let Some(value) = patch.notify_enabled {
+            active.notify_enabled = Set(value);
         }
         if let Some(value) = patch.categories {
             active.categories = Set(value);

@@ -1,10 +1,9 @@
 import { type ShellWindowHandle, useWindowActions } from "@tokimo/sdk";
 import { Alert, Badge, Button, Switch, Tag } from "@tokimo/ui";
-import { Edit3, Plus, Trash2 } from "lucide-react";
+import { Bell, Edit3, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { CreateRuleReq, DeliveryDto, RuleDto, SourceDto } from "../api/types";
-import { DeliveryList } from "./DeliveryList";
+import type { CreateRuleReq, RuleDto, SourceDto } from "../api/types";
 
 interface RulesPanelProps {
   sources: SourceDto[];
@@ -16,18 +15,15 @@ interface RulesPanelProps {
 
 export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftConsumed }: RulesPanelProps) {
   const [rules, setRules] = useState<RuleDto[]>([]);
-  const [deliveries, setDeliveries] = useState<DeliveryDto[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const consumedDraftRef = useRef<CreateRuleReq | null>(null);
   const { openModalWindow } = useWindowActions();
 
   const load = useCallback(async () => {
     try {
-      const [ruleResponse, deliveryResponse] = await Promise.all([api.rules.list(), api.deliveries.list()]);
+      const ruleResponse = await api.rules.list();
       setRules(ruleResponse.rules);
-      setDeliveries(deliveryResponse.deliveries);
     } catch (reason: unknown) {
       setMessage({ type: "error", text: `${t("errorPrefix")}${reason instanceof Error ? reason.message : String(reason)}` });
     }
@@ -81,18 +77,20 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
     }
   };
 
-  const sendTest = async () => {
-    setTesting(true);
-    setMessage(null);
-    try {
-      await api.notifications.test();
-      setMessage({ type: "success", text: t("testSubmitted") });
-      await load();
-    } catch (reason: unknown) {
-      setMessage({ type: "error", text: `${t("errorPrefix")}${reason instanceof Error ? reason.message : String(reason)}` });
-    } finally {
-      setTesting(false);
-    }
+  const openDeliveries = () => {
+    openModalWindow({
+      component: async () => {
+        const { DeliveriesWindow } = await import("./DeliveriesWindow");
+        return {
+          default: ({ win: _win }: { win: ShellWindowHandle }) => (
+            <DeliveriesWindow locale={locale} t={t} />
+          ),
+        };
+      },
+      title: t("deliveries"),
+      width: 640,
+      height: 620,
+    });
   };
 
   const confirmDelete = (rule: RuleDto) => {
@@ -138,9 +136,18 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
           <h1 className="text-lg font-semibold">{t("rules")}</h1>
           <p className="mt-1 text-xs text-fg-secondary">{t("ruleLogic")}</p>
         </div>
-        <Button variant="primary" icon={<Plus />} disabled={sources.every((source) => Boolean(source.archivedAt))} onClick={() => openEditor(null)}>
-          {t("addRule")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            icon={<Bell />}
+            shape="circle"
+            aria-label={t("deliveries")}
+            title={t("deliveries")}
+            onClick={openDeliveries}
+          />
+          <Button variant="primary" icon={<Plus />} disabled={sources.every((source) => Boolean(source.archivedAt))} onClick={() => openEditor(null)}>
+            {t("addRule")}
+          </Button>
+        </div>
       </header>
       {message ? <Alert type={message.type} showIcon message={message.text} className="mb-4" /> : null}
       <Alert type="info" showIcon message={t("previewOnly")} className="mb-4" />
@@ -160,7 +167,10 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
                   <p className="mt-1 text-xs text-fg-muted">{source?.name ?? t("unknown")} · {rule.matchScope === "title" ? t("titleOnly") : t("titleAndSummary")}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={rule.enabled} loading={busyId === rule.id} size="small" onChange={(enabled) => void mutate(rule.id, () => api.rules.patch(rule.id, { enabled }))} />
+                  <label className="flex items-center gap-1.5 text-xs text-fg-secondary">
+                    <Switch checked={rule.notifyEnabled} loading={busyId === rule.id} size="small" onChange={(notifyEnabled) => void mutate(rule.id, () => api.rules.patch(rule.id, { notifyEnabled }))} />
+                    {t("notifyEnabled")}
+                  </label>
                   <Button size="small" icon={<Edit3 />} onClick={() => openEditor(rule)}>{t("editRule")}</Button>
                   <Button size="small" danger icon={<Trash2 />} loading={busyId === rule.id} onClick={() => confirmDelete(rule)}>{t("delete")}</Button>
                 </div>
@@ -174,7 +184,6 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
           );
         })}
       </div>
-      <DeliveryList deliveries={deliveries} locale={locale} testing={testing} t={t} onTest={() => void sendTest()} />
     </div>
   );
 }

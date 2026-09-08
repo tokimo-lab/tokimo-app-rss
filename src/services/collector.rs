@@ -286,7 +286,7 @@ pub async fn persist_leased(
             if !initial_import {
                 let matched = rules
                     .iter()
-                    .filter(|rule| matcher::matches(rule, &entry))
+                    .filter(|rule| matcher::should_notify(rule, &entry))
                     .map(|rule| (rule.id, rule.name.clone()))
                     .collect::<Vec<_>>();
                 if !matched.is_empty() {

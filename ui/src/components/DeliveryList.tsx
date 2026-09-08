@@ -20,7 +20,7 @@ const badgeStatus: Record<DeliveryStatus, "default" | "processing" | "success" |
 
 export function DeliveryList({ deliveries, locale, testing, t, onTest }: DeliveryListProps) {
   return (
-    <section className="mt-6">
+    <section>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-fg-primary">{t("deliveries")}</h2>
         <Button size="small" icon={<Bell />} loading={testing} onClick={onTest}>{t("sendTest")}</Button>

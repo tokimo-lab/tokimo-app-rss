@@ -9,6 +9,7 @@ pub struct Model {
     pub source_id: Uuid,
     pub name: String,
     pub enabled: bool,
+    pub notify_enabled: bool,
     pub categories: Vec<String>,
     pub include_any: Vec<String>,
     pub exclude_any: Vec<String>,

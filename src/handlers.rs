@@ -78,16 +78,17 @@ pub struct EntriesQuery {
 
 export_dto! { #[derive(Serialize, TS)] pub struct RuleDto {
     #[ts(type = "string")] pub id: Uuid, #[ts(type = "string")] pub source_id: Uuid,
-    pub name: String, pub enabled: bool, pub categories: Vec<String>, pub include_any: Vec<String>,
+    pub name: String, pub enabled: bool, pub notify_enabled: bool, pub categories: Vec<String>, pub include_any: Vec<String>,
     pub exclude_any: Vec<String>, pub match_scope: String, pub created_at: String, pub updated_at: String,
 } }
 export_dto! { #[derive(Serialize, TS)] pub struct RulesListResp { pub rules: Vec<RuleDto> } }
 export_dto! { #[derive(Deserialize, TS)] pub struct CreateRuleReq {
     #[ts(type = "string")] pub source_id: Uuid, pub name: String, #[serde(default = "default_true")] pub enabled: bool,
+    #[serde(default = "default_true")] pub notify_enabled: bool,
     #[serde(default)] pub categories: Vec<String>, pub include_any: Vec<String>, #[serde(default)] pub exclude_any: Vec<String>, pub match_scope: String,
 } }
 export_dto! { #[derive(Deserialize, TS)] pub struct PatchRuleReq {
-    pub name: Option<String>, pub enabled: Option<bool>, pub categories: Option<Vec<String>>,
+    pub name: Option<String>, pub enabled: Option<bool>, pub notify_enabled: Option<bool>, pub categories: Option<Vec<String>>,
     pub include_any: Option<Vec<String>>, pub exclude_any: Option<Vec<String>>, pub match_scope: Option<String>,
 } }
 export_dto! { #[derive(Deserialize, TS)] pub struct RulePreviewReq {
@@ -252,6 +253,7 @@ pub async fn rules_create(
         source_id: req.source_id,
         name: req.name.trim().into(),
         enabled: req.enabled,
+        notify_enabled: req.notify_enabled,
         categories: clean_values(req.categories)?,
         include_any: clean_values(req.include_any)?,
         exclude_any: clean_values(req.exclude_any)?,
@@ -286,6 +288,7 @@ pub async fn rules_patch(
         RulePatch {
             name: req.name.map(|v| v.trim().into()),
             enabled: req.enabled,
+            notify_enabled: req.notify_enabled,
             categories,
             include_any,
             exclude_any,
@@ -336,6 +339,7 @@ pub async fn rules_preview(
         source_id: req.source_id,
         name: req.name.unwrap_or_else(|| "preview".into()),
         enabled: req.enabled,
+        notify_enabled: true,
         categories: req.categories,
         include_any: req.include_any,
         exclude_any: req.exclude_any,
@@ -513,6 +517,7 @@ impl From<rules::Model> for RuleDto {
             source_id: r.source_id,
             name: r.name,
             enabled: r.enabled,
+            notify_enabled: r.notify_enabled,
             categories: r.categories,
             include_any: r.include_any,
             exclude_any: r.exclude_any,

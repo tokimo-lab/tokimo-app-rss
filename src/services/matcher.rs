@@ -45,6 +45,10 @@ pub fn matches(rule: &rules::Model, entry: &entries::Model) -> bool {
     includes && !excludes
 }
 
+pub fn should_notify(rule: &rules::Model, entry: &entries::Model) -> bool {
+    rule.notify_enabled && matches(rule, entry)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -80,6 +84,7 @@ mod tests {
             source_id: Uuid::new_v4(),
             name: "trade".into(),
             enabled: true,
+            notify_enabled: true,
             categories: vec!["交易".into()],
             include_any: vec!["ＢＷＨ".into(), "搬瓦工".into()],
             exclude_any: vec!["已出".into()],
@@ -103,5 +108,14 @@ mod tests {
         assert!(!matches(&candidate, &target));
         candidate.match_scope = "title_summary".into();
         assert!(matches(&candidate, &target));
+    }
+
+    #[test]
+    fn muted_rule_still_matches_without_notifying() {
+        let mut candidate = rule();
+        let target = entry("搬瓦工补货", None, &["交易"]);
+        candidate.notify_enabled = false;
+        assert!(matches(&candidate, &target));
+        assert!(!should_notify(&candidate, &target));
     }
 }
