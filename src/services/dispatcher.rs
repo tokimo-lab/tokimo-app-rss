@@ -50,17 +50,18 @@ pub fn start(db: DatabaseConnection, client: Arc<BusClient>) {
 }
 
 fn notification_request(view: &DeliveryView) -> NotifyRequest {
-    let mut body = format!(
-        "来源：{}\n命中规则：{}",
-        view.source.name,
-        view.active_rule_names.join("、")
-    );
+    let mut body = String::new();
     if let Some(summary) = &view.entry.summary
         && !summary.is_empty()
     {
-        body.push('\n');
         body.push_str(summary);
+        body.push_str("\n\n");
     }
+    body.push_str(&format!(
+        "来源：{}\n命中规则：{}",
+        view.source.name,
+        view.active_rule_names.join("、")
+    ));
     let action = url::Url::parse(&view.entry.url)
         .ok()
         .filter(|url| matches!(url.scheme(), "http" | "https"))
@@ -118,7 +119,7 @@ mod tests {
                 external_id: "x".into(),
                 url: entry_url.into(),
                 title: "标题".into(),
-                summary: None,
+                summary: Some("帖子正文".into()),
                 categories: vec![],
                 author: None,
                 published_at: None,
@@ -174,7 +175,10 @@ mod tests {
             request.action,
             Some(serde_json::json!({ "type": "open-url", "url": entry_url }))
         );
-        assert_eq!(request.body, format!("来源：源\n命中规则：规则\n{entry_url}"));
+        assert_eq!(
+            request.body,
+            format!("帖子正文\n\n来源：源\n命中规则：规则\n{entry_url}")
+        );
     }
 
     #[test]
@@ -183,7 +187,17 @@ mod tests {
             let request = notification_request(&delivery_view(entry_url));
 
             assert_eq!(request.action, None, "unexpected action for {entry_url:?}");
-            assert_eq!(request.body, "来源：源\n命中规则：规则");
+            assert_eq!(request.body, "帖子正文\n\n来源：源\n命中规则：规则");
         }
+    }
+
+    #[test]
+    fn missing_summary_starts_with_source_metadata() {
+        let mut view = delivery_view("");
+        view.entry.summary = None;
+
+        let request = notification_request(&view);
+
+        assert_eq!(request.body, "来源：源\n命中规则：规则");
     }
 }
