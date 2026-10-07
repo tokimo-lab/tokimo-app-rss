@@ -35,6 +35,11 @@ export default defineApp({
     category: "app",
   },
   translations: { "zh-CN": zhCN, "en-US": enUS },
+  standalone: {
+    createWindow: (route) => ({ type: "rss", route }),
+    getRoute: (window) =>
+      window.type === "rss" ? (window.route ?? "/") : null,
+  },
   mount(container, ctx): Dispose {
     const root: Root = createRoot(container);
     root.render(
