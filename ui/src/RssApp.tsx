@@ -206,7 +206,7 @@ export function RssApp({ ctx }: RssAppProps) {
           onDeleteSavedView={deleteSavedView}
         />
       ) : null}
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="app-safe-area flex min-w-0 flex-1 flex-col bg-surface-base">
         {narrow ? (
           <CompactNav
             sources={sources}

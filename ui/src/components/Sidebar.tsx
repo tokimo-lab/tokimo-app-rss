@@ -47,7 +47,7 @@ export function Sidebar({
   onDeleteSavedView,
 }: SidebarProps) {
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border-subtle bg-surface-sidebar text-fg-primary">
+    <aside className="app-safe-area flex w-60 shrink-0 flex-col border-r border-border-subtle bg-surface-sidebar text-fg-primary">
       <header className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-3.5">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-fg-on-accent shadow-sm">
           <Rss className="h-4 w-4" />
