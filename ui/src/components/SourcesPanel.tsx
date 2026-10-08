@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { type ShellWindowHandle, useWindowActions } from "@tokimo/sdk";
 import { Alert, Badge, Button } from "@tokimo/ui";
 import { Archive, Edit3, Pause, Play, Plus, RefreshCw, Rss } from "lucide-react";
@@ -15,6 +16,7 @@ interface SourcesPanelProps {
 }
 
 export function SourcesPanel({ sources, locale, t, onOpenEditor, onSourcesChanged }: SourcesPanelProps) {
+  const documentScroll = useStandaloneDocumentScroll();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const { openModalWindow } = useWindowActions();
@@ -85,7 +87,7 @@ export function SourcesPanel({ sources, locale, t, onOpenEditor, onSourcesChange
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-surface-base px-5 py-5 text-fg-primary">
+    <div className={`bg-surface-base px-5 py-5 text-fg-primary ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}>
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">{t("manageSources")}</h1>

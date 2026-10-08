@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { Alert, Button } from "@tokimo/ui";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,6 +41,7 @@ export function EntryBrowser({
   t,
   onSaveAsRule,
 }: EntryBrowserProps) {
+  const documentScroll = useStandaloneDocumentScroll();
   const [draft, setDraft] = useState<SearchDraft>(() =>
     initialQuery(sourceId, viewId),
   );
@@ -123,7 +125,7 @@ export function EntryBrowser({
     sources.map((source) => source.initializedAt).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
 
   const listPane = (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base">
+    <div className={`min-h-0 flex-1 bg-surface-base ${documentScroll ? "overflow-visible" : "overflow-y-auto"}`}>
       <EntryList
         entries={entries}
         selectedId={selected?.id}
@@ -138,7 +140,7 @@ export function EntryBrowser({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-surface-base text-fg-primary">
+    <div className={`flex min-h-0 flex-col bg-surface-base text-fg-primary ${documentScroll ? "" : "h-full"}`}>
       <SearchToolbar
         draft={draft}
         sources={sources}

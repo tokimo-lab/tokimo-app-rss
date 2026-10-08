@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { type ShellWindowHandle, useWindowActions } from "@tokimo/sdk";
 import { Alert, Badge, Button, Switch, Tag } from "@tokimo/ui";
 import { Bell, Edit3, Plus, Trash2 } from "lucide-react";
@@ -14,6 +15,7 @@ interface RulesPanelProps {
 }
 
 export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftConsumed }: RulesPanelProps) {
+  const documentScroll = useStandaloneDocumentScroll();
   const [rules, setRules] = useState<RuleDto[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -130,7 +132,7 @@ export function RulesPanel({ sources, locale, t, initialDraft, onInitialDraftCon
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-surface-base px-5 py-5 text-fg-primary">
+    <div className={`bg-surface-base px-5 py-5 text-fg-primary ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}>
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">{t("rules")}</h1>

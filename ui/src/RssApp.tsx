@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { type AppRuntimeCtx, type ShellWindowHandle, makeTranslator, useWindowActions } from "@tokimo/sdk";
 import { Alert, Button, Select } from "@tokimo/ui";
 import { ListPlus, Plus } from "lucide-react";
@@ -15,6 +16,7 @@ interface RssAppProps {
 }
 
 export function RssApp({ ctx }: RssAppProps) {
+  const documentScroll = useStandaloneDocumentScroll();
   const rootRef = useRef<HTMLDivElement>(null);
   const [locale, setLocale] = useState(ctx.locale);
   const t = useMemo(() => makeTranslator({ "zh-CN": zhCN, "en-US": enUS }, locale), [locale]);
@@ -192,7 +194,7 @@ export function RssApp({ ctx }: RssAppProps) {
   );
 
   return (
-    <div ref={rootRef} className="flex h-full w-full min-w-0 bg-surface-base text-fg-primary">
+    <div ref={rootRef} className={`flex w-full min-w-0 bg-surface-base text-fg-primary ${documentScroll ? "min-h-dvh" : "h-full"}`}>
       {!narrow ? (
         <Sidebar
           sources={sources}

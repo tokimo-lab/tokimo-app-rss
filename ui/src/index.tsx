@@ -1,3 +1,4 @@
+import { cssVar, TOKEN } from "@tokimo/ui";
 import {
   type AppRuntimeCtx,
   type Dispose,
@@ -36,6 +37,8 @@ export default defineApp({
   },
   translations: { "zh-CN": zhCN, "en-US": enUS },
   standalone: {
+    layout: "document",
+    background: cssVar(TOKEN.surfaceBase),
     createWindow: (route) => ({ type: "rss", route }),
     getRoute: (window) =>
       window.type === "rss" ? (window.route ?? "/") : null,

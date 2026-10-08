@@ -1,3 +1,4 @@
+import { useStandaloneDocumentScroll } from "@tokimo/sdk";
 import { Button, Tag } from "@tokimo/ui";
 import { ArrowLeft, ExternalLink, FileText } from "lucide-react";
 import type { EntryDto } from "../api/types";
@@ -13,6 +14,7 @@ interface EntryDetailProps {
 }
 
 export function EntryDetail({ entry, locale, narrow, loading, t, onBack }: EntryDetailProps) {
+  const documentScroll = useStandaloneDocumentScroll();
   if (loading) {
     return <div className="grid h-full place-items-center text-sm text-fg-muted">{t("loading")}</div>;
   }
@@ -29,7 +31,7 @@ export function EntryDetail({ entry, locale, narrow, loading, t, onBack }: Entry
 
   const link = safeHttpUrl(entry.url);
   return (
-    <article className="h-full overflow-y-auto px-6 py-5 text-fg-primary">
+    <article className={`px-6 py-5 text-fg-primary ${documentScroll ? "overflow-visible" : "h-full overflow-y-auto"}`}>
       {narrow ? (
         <Button variant="text" size="small" icon={<ArrowLeft />} className="mb-3" onClick={onBack}>
           {t("backToList")}
