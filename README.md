@@ -10,7 +10,7 @@ Tokimo 的常驻 RSS / Atom 订阅 App。它把 feed 的完整当前窗口保存
 - 每个订阅源可以保存独立子视图；子视图基础条件在服务端与页面临时搜索条件叠加，并在过滤后进行游标分页。
 - entry 与持久 delivery outbox 在同一事务创建；通知成功响应只表示系统已接受。失败按稳定 dedupe key 至少一次重试。
 - 仅支持不含凭据的 HTTP(S) URL；初始 URL 和每次重定向都会重新检查协议与凭据。网络可达范围、DNS 结果及地址访问控制由部署环境的 dnsmasq 和网络策略负责。App 保留 15 秒总超时、5 MiB 响应上限和最多 3 次重定向的资源保护。
-- 不读取 Cookie，不抓网页正文，不执行历史全站爬取，也不持有任何外部推送渠道凭据。
+- 不读取用户 Cookie，不抓网页正文，不执行历史全站爬取，也不持有任何外部推送渠道凭据。
 
 ## API
 
@@ -27,6 +27,12 @@ Tokimo 的常驻 RSS / Atom 订阅 App。它把 feed 的完整当前窗口保存
 ## 数据库与运行
 
 宿主依据 `tokimo-app.toml` 创建 `rss` schema 并执行 `migrations/`；sidecar 自身不会建表。无子命令且存在 `TOKIMO_BUS_SOCKET` 时进入 resident server 模式，恢复采集调度和未完成 outbox；人工直接运行只打印帮助。
+
+### Cloudflare 抓取
+
+RSS 通过 `tokimo-web-fetch` 的原始响应入口抓取。普通 feed 直接使用 HTTP；遇到 `cf-mitigated: challenge` 时，调用 `FLARESOLVERR_URL` 指定的 FlareSolverr 服务获取站点范围内的 Cookie 和浏览器 User-Agent，再重发原始请求。RSS 解析真实 HTTP 返回的 XML，保留 ETag、Last-Modified、304、Retry-After、逐跳重定向校验和 5 MiB 流式上限；不会把浏览器渲染的 HTML 当作 feed。
+
+在宿主环境配置 `FLARESOLVERR_URL`（例如 `http://flaresolverr:8191`），由 sidecar 继承。服务需要单独部署，且与 RSS 使用相同公网出口；当前接入不会自动创建服务。未配置时普通订阅仍正常，受挑战的源会记录明确的配置缺失错误。解挑战单次最多 10 秒，仍受每次 feed 抓取 15 秒总期限限制；浏览器启动、挑战或传输超时会按现有失败退避重试。Cookie 只用于当前抓取，不落库、不跨订阅源共享；复用 Cookie 也不能保证通过依赖浏览器传输指纹的防护。FlareSolverr 浏览器自身的重定向和网络访问由部署网络策略限制。
 
 ## 验证
 

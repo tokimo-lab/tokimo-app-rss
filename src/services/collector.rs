@@ -6,6 +6,7 @@ use futures_util::StreamExt;
 use reqwest::{StatusCode, header};
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use sha2::{Digest, Sha256};
+use tokimo_web_fetch::{CloudflareBypassClient, cloudflare::is_cloudflare_challenge};
 use url::Url;
 use uuid::Uuid;
 
@@ -81,32 +82,44 @@ async fn fetch_with_redirects(
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| fetch_error(format!("HTTP client: {e}")))?;
+    let flaresolverr_url = std::env::var("FLARESOLVERR_URL")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let client = CloudflareBypassClient::with_client(client, flaresolverr_url);
+    let mut headers = header::HeaderMap::new();
+    headers.insert(
+        header::USER_AGENT,
+        header::HeaderValue::from_static("TokimoRSS/0.1 (+https://github.com/tokimo-lab/tokimo-app-rss)"),
+    );
+    headers.insert(
+        header::ACCEPT,
+        header::HeaderValue::from_static("application/rss+xml, application/atom+xml, application/xml, text/xml"),
+    );
+    for (name, value) in [
+        (header::IF_NONE_MATCH, etag),
+        (header::IF_MODIFIED_SINCE, last_modified),
+    ] {
+        if let Some(value) = value {
+            headers.insert(
+                name,
+                value
+                    .parse()
+                    .map_err(|e| fetch_error(format!("invalid feed validator: {e}")))?,
+            );
+        }
+    }
     for redirect_count in 0..=MAX_REDIRECTS {
         validate_url_shape(&current)?;
-        let mut request = client
-            .get(current.clone())
-            .header(
-                header::USER_AGENT,
-                "TokimoRSS/0.1 (+https://github.com/tokimo-lab/tokimo-app-rss)",
-            )
-            .header(
-                header::ACCEPT,
-                "application/rss+xml, application/atom+xml, application/xml, text/xml",
-            );
-        if let Some(value) = etag {
-            request = request.header(header::IF_NONE_MATCH, value);
-        }
-        if let Some(value) = last_modified {
-            request = request.header(header::IF_MODIFIED_SINCE, value);
-        }
-        let response = request
-            .send()
+        let response = client
+            .fetch_raw(current.as_str(), headers.clone())
             .await
             .map_err(|e| fetch_error(format!("feed request failed: {e}")))?;
-        if response.status() == StatusCode::NOT_MODIFIED {
+        let challenged = is_cloudflare_challenge(response.headers());
+        if response.status() == StatusCode::NOT_MODIFIED && !challenged {
             return Ok(FetchOutcome::NotModified);
         }
-        if response.status().is_redirection() {
+        if response.status().is_redirection() && !challenged {
             if redirect_count == MAX_REDIRECTS {
                 return Err(fetch_error("too many redirects"));
             }
@@ -120,14 +133,21 @@ async fn fetch_with_redirects(
                 .map_err(|_| fetch_error("invalid redirect URL"))?;
             continue;
         }
-        if !response.status().is_success() {
+        if challenged || !response.status().is_success() {
             let retry_after_seconds = response
                 .headers()
                 .get(header::RETRY_AFTER)
                 .and_then(|value| value.to_str().ok())
                 .and_then(parse_retry_after);
             return Err(FetchError {
-                message: format!("feed returned HTTP {}", response.status()),
+                message: if challenged {
+                    format!(
+                        "Cloudflare challenge remained after browser clearance (HTTP {})",
+                        response.status()
+                    )
+                } else {
+                    format!("feed returned HTTP {}", response.status())
+                },
                 retry_after_seconds,
             });
         }
