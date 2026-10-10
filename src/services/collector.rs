@@ -25,6 +25,7 @@ use crate::{
 };
 
 pub const MAX_BODY_BYTES: usize = 5 * 1024 * 1024;
+pub const COLLECTION_LEASE_SECONDS: i64 = 120;
 const MAX_REDIRECTS: usize = 3;
 const MAX_ENTRIES: usize = 5_000;
 
@@ -65,15 +66,24 @@ pub fn normalize_url(raw: &str) -> Result<String, AppError> {
 }
 
 pub async fn fetch(url: &str, etag: Option<&str>, last_modified: Option<&str>) -> Result<FetchOutcome, FetchError> {
-    tokio::time::timeout(Duration::from_secs(15), fetch_with_redirects(url, etag, last_modified))
-        .await
-        .map_err(|_| fetch_error("feed request exceeded 15 seconds"))?
+    let flaresolverr_url = std::env::var("FLARESOLVERR_URL")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let budget_seconds = if flaresolverr_url.is_some() { 90 } else { 15 };
+    tokio::time::timeout(
+        Duration::from_secs(budget_seconds),
+        fetch_with_redirects(url, etag, last_modified, flaresolverr_url),
+    )
+    .await
+    .map_err(|_| fetch_error(format!("feed request exceeded {budget_seconds} seconds")))?
 }
 
 async fn fetch_with_redirects(
     url: &str,
     etag: Option<&str>,
     last_modified: Option<&str>,
+    flaresolverr_url: Option<String>,
 ) -> Result<FetchOutcome, FetchError> {
     let mut current = Url::parse(url).map_err(|_| fetch_error("invalid feed URL"))?;
     let client = reqwest::Client::builder()
@@ -82,10 +92,6 @@ async fn fetch_with_redirects(
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| fetch_error(format!("HTTP client: {e}")))?;
-    let flaresolverr_url = std::env::var("FLARESOLVERR_URL")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
     let client = CloudflareBypassClient::with_client(client, flaresolverr_url);
     let mut headers = header::HeaderMap::new();
     headers.insert(

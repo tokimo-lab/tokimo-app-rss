@@ -3770,7 +3770,7 @@ dependencies = [
 [[package]]
 name = "tokimo-web-fetch"
 version = "0.1.0"
-source = "git+https://github.com/tokimo-lab/tokimo-package-web-fetch?rev=4792b1cc3da8c84d379a40ce3a282a03bcdca1d5#4792b1cc3da8c84d379a40ce3a282a03bcdca1d5"
+source = "git+https://github.com/tokimo-lab/tokimo-package-web-fetch?rev=f9d14b78775c0b8d560520c42577e91139380a2e#f9d14b78775c0b8d560520c42577e91139380a2e"
 dependencies = [
  "async-trait",
  "dom_query",

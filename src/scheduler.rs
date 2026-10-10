@@ -32,7 +32,9 @@ async fn run_collection_cycle(db: &DatabaseConnection) -> Result<(), crate::AppE
     for sources in groups.into_values() {
         let mut leased = Vec::new();
         for source in sources {
-            if let Some(pair) = SourcesRepo::acquire_lease(db, source.user_id, source.id, 45).await? {
+            if let Some(pair) =
+                SourcesRepo::acquire_lease(db, source.user_id, source.id, collector::COLLECTION_LEASE_SECONDS).await?
+            {
                 leased.push(pair);
             }
         }

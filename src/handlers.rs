@@ -212,7 +212,9 @@ pub async fn sources_refresh(
     let source = SourcesRepo::get(&ctx.db, user_id, id)
         .await?
         .ok_or_else(|| AppError::not_found("source not found"))?;
-    let Some((source, token)) = SourcesRepo::acquire_lease(&ctx.db, user_id, source.id, 45).await? else {
+    let Some((source, token)) =
+        SourcesRepo::acquire_lease(&ctx.db, user_id, source.id, collector::COLLECTION_LEASE_SECONDS).await?
+    else {
         return Ok(Json(RefreshSourceResp {
             status: "already-running".into(),
         }));
